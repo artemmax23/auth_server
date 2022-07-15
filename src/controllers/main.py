@@ -1,3 +1,7 @@
+import redis
+import os
+import humanfriendly as hf
+from datetime import timedelta
 from flask import jsonify, request
 from flask_jwt_extended import JWTManager
 from flask_jwt_extended import create_access_token
@@ -11,15 +15,21 @@ from user.repository import Repository
 
 db = Repository.connect()
 
-blacklist = set()
+jwt_redis_blocklist = redis.StrictRedis(
+    host=os.getenv('REDIS_HOST'),
+    port=os.getenv('REDIS_PORT_NUMBER'),
+    db=0,
+    decode_responses=True
+)
 
 jwt = JWTManager()
 
 
 @jwt.token_in_blocklist_loader
-def check_if_token_in_blacklist(decrypted_token: dict) -> bool:
-    jti = decrypted_token['jti']
-    return jti in blacklist
+def check_if_token_is_revoked(jwt_header, jwt_payload: dict):
+    jti = jwt_payload["jti"]
+    token_in_redis = jwt_redis_blocklist.get(jti)
+    return token_in_redis is not None
 
 
 def login():
@@ -55,5 +65,6 @@ def logout():
     token: dict = get_jwt()
     jti: dict = token["jti"]
     ttype: str = token["type"]
-    blacklist.add(jti)
+    jwt_redis_blocklist.set(jti, "", ex=timedelta(seconds=
+                                                  hf.parse_timespan(os.getenv('ACCESS_LIFETIME', '30m'))))
     return jsonify({"msg": f"{ttype.capitalize()} token successfully revoked"}), 200
