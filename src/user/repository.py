@@ -6,7 +6,7 @@ class Repository:
     db: DBInterface = None
 
     @staticmethod
-    def connect():
+    def connect() -> DBInterface:
         if Repository.db is None:
             Repository.db = Postgres()
         return Repository.db

@@ -9,11 +9,13 @@ from flask_jwt_extended import create_refresh_token
 from flask_jwt_extended import get_jwt
 from flask_jwt_extended import get_jwt_identity
 from flask_jwt_extended import jwt_required
+from models.db_interface import DBInterface
 
 from models.model import Users
+from flask_jwt_extended import JWTManager
 from user.repository import Repository
 
-db = Repository.connect()
+db: DBInterface = Repository.connect()
 
 jwt_redis_blocklist = redis.StrictRedis(
     host=os.getenv('REDIS_HOST'),
@@ -22,12 +24,12 @@ jwt_redis_blocklist = redis.StrictRedis(
     decode_responses=True
 )
 
-jwt = JWTManager()
+jwt: JWTManager = JWTManager()
 
 
 @jwt.token_in_blocklist_loader
-def check_if_token_is_revoked(jwt_header, jwt_payload: dict):
-    jti = jwt_payload["jti"]
+def check_if_token_is_revoked(jwt_header, jwt_payload: dict) -> bool:
+    jti: str = jwt_payload["jti"]
     token_in_redis = jwt_redis_blocklist.get(jti)
     return token_in_redis is not None
 
@@ -43,12 +45,12 @@ def login():
     elif user.password != password:
         return jsonify('Неверный пароль!'), 401
     else:
-        payload = {
+        payload: dict = {
             'id': user.id,
             'name': name
         }
-        access_token = create_access_token(identity=payload)
-        refresh_token = create_refresh_token(identity=payload)
+        access_token: str = create_access_token(identity=payload)
+        refresh_token: str = create_refresh_token(identity=payload)
 
         return jsonify(access_token=access_token, refresh_token=refresh_token)
 
@@ -63,7 +65,7 @@ def refresh():
 @jwt_required(verify_type=False)
 def logout():
     token: dict = get_jwt()
-    jti: dict = token["jti"]
+    jti: str = token["jti"]
     ttype: str = token["type"]
     jwt_redis_blocklist.set(jti, "", ex=timedelta(seconds=
                                                   hf.parse_timespan(os.getenv('ACCESS_LIFETIME', '30m'))))
